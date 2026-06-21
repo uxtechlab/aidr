@@ -1,13 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, FileCode, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Plus, FileCode, CheckCircle, AlertTriangle, Calendar, List, Check, X, ClipboardList, Info } from 'lucide-react';
 
 interface AdminConfigProps {
   onConfigChanged: () => void;
 }
 
+interface Appointment {
+  id: string;
+  name: string;
+  phone: string;
+  concern: string;
+  preferredDate: string;
+  preferredTime: string;
+  status: 'pending' | 'confirmed' | 'cancelled';
+  createdAt: string;
+}
+
 export default function AdminConfig({ onConfigChanged }: AdminConfigProps) {
   const [jsonConfig, setJsonConfig] = useState<any>(null);
-  
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [activeSubTab, setActiveSubTab] = useState<'appointments' | 'treatments' | 'faqs' | 'schema'>('appointments');
+  const [loadingApts, setLoadingApts] = useState<boolean>(false);
+  const [aptsError, setAptsError] = useState<string | null>(null);
+
   // Treatment Form state
   const [treatmentForm, setTreatmentForm] = useState({
     name: '',
@@ -43,9 +58,51 @@ export default function AdminConfig({ onConfigChanged }: AdminConfigProps) {
     }
   };
 
+  // Fetch appointments list
+  const fetchAppointments = async () => {
+    setLoadingApts(true);
+    setAptsError(null);
+    try {
+      const res = await fetch('http://localhost:5000/api/appointments');
+      if (!res.ok) throw new Error('Failed to load appointments.');
+      const data = await res.json();
+      // Sort by createdAt descending
+      data.sort((a: Appointment, b: Appointment) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      setAppointments(data);
+    } catch (e: any) {
+      console.error(e);
+      setAptsError('Could not connect to appointments API.');
+    } finally {
+      setLoadingApts(false);
+    }
+  };
+
   useEffect(() => {
     fetchCurrentConfig();
+    fetchAppointments();
   }, []);
+
+  const handleUpdateStatus = async (id: string, newStatus: 'confirmed' | 'cancelled') => {
+    try {
+      const res = await fetch(`http://localhost:5000/api/appointments/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+
+      if (res.ok) {
+        // Refresh local list
+        setAppointments(prev => 
+          prev.map(apt => apt.id === id ? { ...apt, status: newStatus } : apt)
+        );
+      } else {
+        alert('Failed to update status.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error updating status.');
+    }
+  };
 
   const handleAddTreatment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -129,15 +186,169 @@ export default function AdminConfig({ onConfigChanged }: AdminConfigProps) {
     }
   };
 
+  const getStatusBadgeStyle = (status: string) => {
+    switch (status) {
+      case 'confirmed':
+        return { background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.3)' };
+      case 'cancelled':
+        return { background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.3)' };
+      default:
+        return { background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', border: '1px solid rgba(245, 158, 11, 0.3)' };
+    }
+  };
+
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '1.5rem' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       
-      {/* Forms Section */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-        
-        {/* Treatment Form Card */}
+      {/* Admin Dashboard Sub-navigation Tabs */}
+      <div className="tab-list" style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.75rem', marginBottom: '0.5rem' }}>
+        <button 
+          className={`tab-btn ${activeSubTab === 'appointments' ? 'active' : ''}`}
+          onClick={() => { setActiveSubTab('appointments'); fetchAppointments(); }}
+          style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+          id="admin-tab-appointments"
+        >
+          <ClipboardList size={16} /> Appointments Queue
+        </button>
+        <button 
+          className={`tab-btn ${activeSubTab === 'treatments' ? 'active' : ''}`}
+          onClick={() => setActiveSubTab('treatments')}
+          style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+          id="admin-tab-treatments"
+        >
+          <Plus size={16} /> Add Treatment
+        </button>
+        <button 
+          className={`tab-btn ${activeSubTab === 'faqs' ? 'active' : ''}`}
+          onClick={() => setActiveSubTab('faqs')}
+          style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+          id="admin-tab-faqs"
+        >
+          <List size={16} /> Add FAQ
+        </button>
+        <button 
+          className={`tab-btn ${activeSubTab === 'schema' ? 'active' : ''}`}
+          onClick={() => { setActiveSubTab('schema'); fetchCurrentConfig(); }}
+          style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+          id="admin-tab-schema"
+        >
+          <FileCode size={16} /> Config Schema Explorer
+        </button>
+      </div>
+
+      {/* Active Tab Panels */}
+      
+      {/* 1. APPOINTMENTS MANAGER */}
+      {activeSubTab === 'appointments' && (
         <section className="glass-panel" style={{ padding: '1.5rem' }}>
-          <h2 style={{ fontSize: '1.2rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+            <div>
+              <h2 style={{ fontSize: '1.25rem', marginBottom: '0.25rem' }}>Incoming Appointments Queue</h2>
+              <p style={{ fontSize: '0.82rem', color: 'var(--color-text-secondary)' }}>
+                Track and manage active patient booking requests submitted via the chat widget or direct forms.
+              </p>
+            </div>
+            <button className="btn btn-secondary" onClick={fetchAppointments} style={{ padding: '0.5rem 0.8rem', fontSize: '0.8rem' }}>
+              Refresh list
+            </button>
+          </div>
+
+          {loadingApts ? (
+            <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--color-text-secondary)' }}>
+              Loading queue details...
+            </div>
+          ) : aptsError ? (
+            <div style={{ textAlign: 'center', padding: '2rem', color: '#ef4444' }}>
+              {aptsError}
+            </div>
+          ) : appointments.length > 0 ? (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--glass-border)', color: 'var(--color-text-secondary)' }}>
+                    <th style={{ padding: '0.75rem 1rem' }}>Patient</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>Contact</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>Requested Concern</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>Date & Time</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>Status</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {appointments.map((apt) => (
+                    <tr key={apt.id} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.04)' }} className="hover-row">
+                      <td style={{ padding: '1rem', fontWeight: 600 }}>{apt.name}</td>
+                      <td style={{ padding: '1rem', color: 'var(--color-text-secondary)' }}>{apt.phone}</td>
+                      <td style={{ padding: '1rem', maxWidth: '250px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={apt.concern}>
+                        {apt.concern}
+                      </td>
+                      <td style={{ padding: '1rem' }}>
+                        <span style={{ display: 'block', fontWeight: 500 }}>{apt.preferredDate}</span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>{apt.preferredTime}</span>
+                      </td>
+                      <td style={{ padding: '1rem' }}>
+                        <span 
+                          style={{ 
+                            fontSize: '0.75rem', 
+                            padding: '0.25rem 0.5rem', 
+                            borderRadius: '100px', 
+                            textTransform: 'uppercase',
+                            fontWeight: 700,
+                            ...getStatusBadgeStyle(apt.status)
+                          }}
+                        >
+                          {apt.status}
+                        </span>
+                      </td>
+                      <td style={{ padding: '1rem' }}>
+                        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                          {apt.status === 'pending' && (
+                            <>
+                              <button 
+                                className="btn btn-primary" 
+                                onClick={() => handleUpdateStatus(apt.id, 'confirmed')}
+                                style={{ padding: '0.35rem', borderRadius: '6px' }}
+                                title="Confirm Appointment"
+                                id={`confirm-apt-${apt.id}`}
+                              >
+                                <Check size={14} />
+                              </button>
+                              <button 
+                                className="btn" 
+                                onClick={() => handleUpdateStatus(apt.id, 'cancelled')}
+                                style={{ padding: '0.35rem', borderRadius: '6px', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.2)' }}
+                                title="Cancel Appointment"
+                                id={`cancel-apt-${apt.id}`}
+                              >
+                                <X size={14} />
+                              </button>
+                            </>
+                          )}
+                          {apt.status !== 'pending' && (
+                            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
+                              Handled
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div style={{ textAlign: 'center', padding: '4rem 2rem', color: 'var(--color-text-secondary)' }}>
+              <Calendar size={48} style={{ color: 'var(--color-text-muted)', marginBottom: '1rem' }} />
+              <p>No appointments scheduled yet.</p>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* 2. ADD TREATMENT */}
+      {activeSubTab === 'treatments' && (
+        <section className="glass-panel" style={{ padding: '1.5rem' }}>
+          <h2 style={{ fontSize: '1.25rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <Plus size={18} style={{ color: 'var(--color-primary)' }} />
             Add Clinic Treatment
           </h2>
@@ -241,7 +452,7 @@ export default function AdminConfig({ onConfigChanged }: AdminConfigProps) {
               <textarea 
                 id="admin-t-desc"
                 className="form-input" 
-                style={{ minHeight: '60px' }}
+                style={{ minHeight: '80px' }}
                 placeholder="Briefly describe what this treatment does..."
                 value={treatmentForm.description}
                 onChange={(e) => setTreatmentForm(p => ({ ...p, description: e.target.value }))}
@@ -265,10 +476,12 @@ export default function AdminConfig({ onConfigChanged }: AdminConfigProps) {
             </button>
           </form>
         </section>
+      )}
 
-        {/* FAQ Form Card */}
+      {/* 3. ADD FAQ */}
+      {activeSubTab === 'faqs' && (
         <section className="glass-panel" style={{ padding: '1.5rem' }}>
-          <h2 style={{ fontSize: '1.2rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <h2 style={{ fontSize: '1.25rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <Plus size={18} style={{ color: 'var(--color-primary)' }} />
             Add Clinic FAQ
           </h2>
@@ -305,9 +518,6 @@ export default function AdminConfig({ onConfigChanged }: AdminConfigProps) {
                   <option value="Payments">Payments</option>
                 </select>
               </div>
-              <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                {/* Empty block to align layout cleanly */}
-              </div>
             </div>
 
             <div className="form-group">
@@ -328,7 +538,7 @@ export default function AdminConfig({ onConfigChanged }: AdminConfigProps) {
               <textarea 
                 id="admin-f-a"
                 className="form-input" 
-                style={{ minHeight: '60px' }}
+                style={{ minHeight: '80px' }}
                 placeholder="Detailed answer response..."
                 value={faqForm.answer}
                 onChange={(e) => setFaqForm(p => ({ ...p, answer: e.target.value }))}
@@ -341,30 +551,35 @@ export default function AdminConfig({ onConfigChanged }: AdminConfigProps) {
             </button>
           </form>
         </section>
+      )}
 
-      </div>
+      {/* 4. SCHEMA EXPLORER */}
+      {activeSubTab === 'schema' && (
+        <section className="glass-panel" style={{ padding: '1.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+            <FileCode size={20} style={{ color: 'var(--color-primary)' }} />
+            <h2 style={{ fontSize: '1.25rem' }}>Active services.json Database File</h2>
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem', background: 'rgba(99, 102, 241, 0.1)', padding: '0.75rem', borderRadius: '8px', marginBottom: '1.5rem', fontSize: '0.82rem', alignItems: 'flex-start' }}>
+            <Info size={16} style={{ color: 'var(--color-secondary)', marginTop: '0.1rem', flexShrink: 0 }} />
+            <span style={{ color: 'var(--color-text-secondary)' }}>
+              This schema lists all clinical departments, specialists, treatment profiles, keywords, and FAQ libraries. 
+              Submitting new treatments or FAQs in the editors above writes directly to this JSON file. The changes are loaded 
+              dynamically by the server and immediately update the patient catalog and chatbot.
+            </span>
+          </div>
 
-      {/* JSON File Preview Code Panel */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        <div className="glass-panel" style={{ padding: '1.25rem', height: '100%' }}>
-          <h2 style={{ fontSize: '1.1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <FileCode size={16} style={{ color: 'var(--color-primary)' }} />
-            Active services.json Schema
-          </h2>
-          <p style={{ fontSize: '0.78rem', color: 'var(--color-text-secondary)', marginBottom: '1rem' }}>
-            Adding treatments or FAQs above will rewrite the server-side configuration dynamically. The catalog and chatbot instantly adapt without code modifications or rebuilding.
-          </p>
           {jsonConfig ? (
-            <pre className="admin-json-preview" id="admin-json-view">
+            <pre className="admin-json-preview" id="admin-json-view" style={{ maxHeight: '450px', fontSize: '0.82rem' }}>
               {JSON.stringify(jsonConfig, null, 2)}
             </pre>
           ) : (
-            <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-text-muted)' }}>
+            <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--color-text-muted)' }}>
               Loading database schema preview...
             </div>
           )}
-        </div>
-      </div>
+        </section>
+      )}
 
     </div>
   );
