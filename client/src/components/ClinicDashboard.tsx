@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Search, Clock, ShieldCheck, HelpCircle, Calendar, ChevronDown, ChevronUp, Stethoscope } from 'lucide-react';
+import { Search, Clock, ShieldCheck, HelpCircle, Calendar, ChevronDown, ChevronUp, Stethoscope, User } from 'lucide-react';
+import { apiFetch } from '../config/api';
 
 interface ClinicInfo {
   name: string;
@@ -54,7 +55,7 @@ export default function ClinicDashboard({ onSelectTreatment, refreshTrigger }: C
       try {
         setLoading(true);
         // Load services
-        const resServices = await fetch('http://localhost:5000/api/services');
+        const resServices = await apiFetch('/api/services');
         if (!resServices.ok) throw new Error('Failed to load clinic services.');
         const dataServices = await resServices.json();
         
@@ -63,7 +64,7 @@ export default function ClinicDashboard({ onSelectTreatment, refreshTrigger }: C
         setTreatments(dataServices.treatments);
 
         // Load FAQs
-        const resFaqs = await fetch('http://localhost:5000/api/faqs');
+        const resFaqs = await apiFetch('/api/faqs');
         if (resFaqs.ok) {
           const dataFaqs = await resFaqs.json();
           setFaqs(dataFaqs);
@@ -143,6 +144,29 @@ export default function ClinicDashboard({ onSelectTreatment, refreshTrigger }: C
               <a href={`tel:${clinicInfo.phone}`} style={{ color: 'var(--color-primary)', textDecoration: 'none' }}>{clinicInfo.phone}</a>
             </div>
           </div>
+        </section>
+      )}
+
+      {/* Specialist Cards */}
+      {departments.length > 0 && (
+        <section className="specialist-cards">
+          {departments.map(dept => {
+            const badgeClass = getDeptBadgeClass(dept.id);
+            return (
+              <div key={dept.id} className="glass-panel specialist-card">
+                <div className="specialist-card-icon">
+                  <User size={20} />
+                </div>
+                <span className={badgeClass} style={{ alignSelf: 'flex-start' }}>
+                  {dept.name.replace(' Department', '')}
+                </span>
+                <strong style={{ fontSize: '0.95rem' }}>{dept.specialist}</strong>
+                <p style={{ fontSize: '0.78rem', color: 'var(--color-text-secondary)', lineHeight: 1.4 }}>
+                  {dept.description}
+                </p>
+              </div>
+            );
+          })}
         </section>
       )}
 

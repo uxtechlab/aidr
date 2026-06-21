@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, FileCode, CheckCircle, AlertTriangle, Calendar, List, Check, X, ClipboardList, Info } from 'lucide-react';
+import { apiFetch } from '../config/api';
 
 interface AdminConfigProps {
   onConfigChanged: () => void;
@@ -48,7 +49,7 @@ export default function AdminConfig({ onConfigChanged }: AdminConfigProps) {
   // Fetch config layout to preview JSON contents
   const fetchCurrentConfig = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/services');
+      const res = await apiFetch('/api/services');
       if (res.ok) {
         const data = await res.json();
         setJsonConfig(data);
@@ -63,7 +64,7 @@ export default function AdminConfig({ onConfigChanged }: AdminConfigProps) {
     setLoadingApts(true);
     setAptsError(null);
     try {
-      const res = await fetch('http://localhost:5000/api/appointments');
+      const res = await apiFetch('/api/appointments');
       if (!res.ok) throw new Error('Failed to load appointments.');
       const data = await res.json();
       // Sort by createdAt descending
@@ -84,9 +85,8 @@ export default function AdminConfig({ onConfigChanged }: AdminConfigProps) {
 
   const handleUpdateStatus = async (id: string, newStatus: 'confirmed' | 'cancelled') => {
     try {
-      const res = await fetch(`http://localhost:5000/api/appointments/${id}/status`, {
+      const res = await apiFetch(`/api/appointments/${id}/status`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus })
       });
 
@@ -119,9 +119,8 @@ export default function AdminConfig({ onConfigChanged }: AdminConfigProps) {
         ? treatmentForm.keywords.split(',').map(k => k.trim())
         : [treatmentForm.name.toLowerCase()];
 
-      const res = await fetch('http://localhost:5000/api/admin/treatments', {
+      const res = await apiFetch('/api/admin/treatments', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...treatmentForm,
           cost: costNum,
@@ -162,9 +161,8 @@ export default function AdminConfig({ onConfigChanged }: AdminConfigProps) {
     }
 
     try {
-      const res = await fetch('http://localhost:5000/api/admin/faqs', {
+      const res = await apiFetch('/api/admin/faqs', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(faqForm)
       });
 

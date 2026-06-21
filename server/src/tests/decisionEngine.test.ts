@@ -96,4 +96,10 @@ describe('Decision Engine - Local NLP Matcher', () => {
     expect(res.appointmentReady?.preferredTime).toBe('2:30 PM');
     expect(res.reply).toContain('Booking Confirmed');
   });
+
+  test('should detect urgent symptoms and flag urgency', async () => {
+    const result = await decisionEngine.processMessage(session, 'I have severe tooth pain and heavy bleeding');
+    expect(result.urgencyLevel).toBe('urgent');
+    expect(result.reply).toContain('emergency');
+  });
 });

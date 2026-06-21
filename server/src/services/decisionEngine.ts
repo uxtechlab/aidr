@@ -37,6 +37,7 @@ export class DecisionEngine {
   ): Promise<{
     reply: string;
     session: ChatSession;
+    urgencyLevel: 'normal' | 'urgent';
     recommendations?: {
       department?: Department;
       treatments: Treatment[];
@@ -44,6 +45,7 @@ export class DecisionEngine {
     suggestedFaq?: FAQ;
     appointmentReady?: Partial<Appointment>;
   }> {
+    const urgencyLevel = this.detectUrgency(userText);
     // 1. Record user message
     const userMessage: ChatMessage = {
       id: Math.random().toString(36).substring(7),
@@ -55,7 +57,8 @@ export class DecisionEngine {
 
     // 2. Check if currently in an active booking flow
     if (session.bookingState && session.bookingState.step !== 'none') {
-      return this.handleBookingFlow(session, userText);
+      const bookingResult = this.handleBookingFlow(session, userText);
+      return { ...bookingResult, urgencyLevel };
     }
 
     // 3. Check for booking trigger intents
@@ -82,6 +85,7 @@ export class DecisionEngine {
         return {
           reply,
           session,
+          urgencyLevel,
           ...this.runDiagnostics(userText)
         };
       }
@@ -90,6 +94,7 @@ export class DecisionEngine {
       return {
         reply,
         session,
+        urgencyLevel,
         ...this.runDiagnostics(userText)
       };
     }
@@ -113,6 +118,7 @@ export class DecisionEngine {
           return {
             reply: aiResponse.reply,
             session,
+            urgencyLevel,
             recommendations: diagnostics.recommendations,
             suggestedFaq: diagnostics.suggestedFaq
           };
@@ -125,16 +131,21 @@ export class DecisionEngine {
     // 5. Fallback to Local NLP decision engine
     const diagnostics = this.runDiagnostics(userText);
     let reply = '';
+    
+    let urgentPrefix = '';
+    if (urgencyLevel === 'urgent') {
+      urgentPrefix = '⚠️ **URGENT**: Your symptoms sound serious. Please contact our emergency line immediately at +1 (555) 872-2273 or visit the nearest emergency room. If this is a life-threatening emergency, call 911 right away. Our clinic team is available Mon-Sat 9 AM–7 PM for urgent walk-ins.\n\n';
+    }
 
     if (diagnostics.suggestedFaq) {
-      reply = `${diagnostics.suggestedFaq.answer}\n\n*Would you like to schedule a consultation with our specialist to discuss this further?*`;
+      reply = urgentPrefix + `${diagnostics.suggestedFaq.answer}\n\n*Would you like to schedule a consultation with our specialist to discuss this further?*`;
     } else if (diagnostics.recommendations && diagnostics.recommendations.treatments.length > 0) {
       const rec = diagnostics.recommendations;
       const deptName = rec.department?.name || 'our specialized departments';
       const specialist = rec.department?.specialist ? ` under the care of ${rec.department.specialist}` : '';
       const treatmentList = rec.treatments.map(t => `- **${t.name}** (Cost: $${t.cost}, Recovery: ${t.recoveryTime})`).join('\n');
       
-      reply = `Based on what you've shared, your concerns match our **${deptName}**${specialist}. \n\nWe recommend considering the following treatments:\n${treatmentList}\n\nWould you like to book an appointment for a personalized consultation?`;
+      reply = urgentPrefix + `Based on what you've shared, your concerns match our **${deptName}**${specialist}. \n\nWe recommend considering the following treatments:\n${treatmentList}\n\nWould you like to book an appointment for a personalized consultation?`;
     } else {
       // General greeting / standard helper reply
       reply = this.generateGeneralReply(userText);
@@ -143,6 +154,7 @@ export class DecisionEngine {
     return {
       reply,
       session,
+      urgencyLevel,
       recommendations: diagnostics.recommendations,
       suggestedFaq: diagnostics.suggestedFaq
     };
@@ -470,11 +482,34 @@ export class DecisionEngine {
   }
 
   /**
+   * Detect urgency keywords in user text to flag emergency situations.
+   * @returns 'urgent' if emergency keywords are found, 'normal' otherwise
+   */
+  private detectUrgency(text: string): 'normal' | 'urgent' {
+    const urgencyPatterns = [
+      /\bsevere\b/i,
+      /\bemergency\b/i,
+      /\bunbearable\b/i,
+      /\bextreme\s+pain\b/i,
+      /\bswelling\b/i,
+      /\bbleeding\s+heavily\b/i,
+      /\bheavy\s+bleeding\b/i,
+    ];
+    return urgencyPatterns.some(pattern => pattern.test(text)) ? 'urgent' : 'normal';
+  }
+
+  /**
    * Fallback generic responses for greeting, pricing questions, etc.
+   * Also detects urgent symptoms and returns emergency contact info.
    */
   private generateGeneralReply(text: string): string {
     const lower = text.toLowerCase();
-    
+
+    // Check for urgency first — always surface emergency info
+    if (this.detectUrgency(text) === 'urgent') {
+      return '⚠️ **URGENT**: Your symptoms sound serious. Please contact our emergency line immediately at +1 (555) 872-2273 or visit the nearest emergency room. If this is a life-threatening emergency, call 911 right away. Our clinic team is available Mon-Sat 9 AM–7 PM for urgent walk-ins.';
+    }
+
     if (/hi|hello|hey|greetings/i.test(lower)) {
       return "Hello! Welcome to AuraCare Clinic. How can I help you today? You can ask about our treatments, check recovery times, or schedule an appointment!";
     }

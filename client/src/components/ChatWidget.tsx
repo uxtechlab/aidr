@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, Sparkles, Trash2, ArrowRight } from 'lucide-react';
+import { apiFetch } from '../config/api';
 
 interface ChatMessage {
   id: string;
@@ -34,6 +35,51 @@ const QUICK_SUGGESTIONS = [
   'How much is teeth cleaning?',
   'Schedule a cosmetic checkup'
 ];
+
+function renderMarkdown(text: string): React.ReactNode {
+  const lines = text.split('\n');
+  const elements: React.ReactNode[] = [];
+  let listItems: string[] = [];
+  let key = 0;
+
+  const flushList = () => {
+    if (listItems.length > 0) {
+      elements.push(
+        <ul key={`ul-${key++}`} style={{ margin: '0.25rem 0', paddingLeft: '1.25rem' }}>
+          {listItems.map((item, i) => (
+            <li key={i}>{parseBold(item)}</li>
+          ))}
+        </ul>
+      );
+      listItems = [];
+    }
+  };
+
+  const parseBold = (segment: string): React.ReactNode => {
+    const parts = segment.split(/(\*\*[^*]+\*\*)/);
+    return parts.map((part, i) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={i}>{part.slice(2, -2)}</strong>;
+      }
+      return part;
+    });
+  };
+
+  lines.forEach((line, idx) => {
+    if (line.startsWith('- ')) {
+      listItems.push(line.slice(2));
+    } else {
+      flushList();
+      if (idx > 0) {
+        elements.push(<br key={`br-${key++}`} />);
+      }
+      elements.push(<React.Fragment key={`t-${key++}`}>{parseBold(line)}</React.Fragment>);
+    }
+  });
+  flushList();
+
+  return <>{elements}</>;
+}
 
 export default function ChatWidget({ onBookTreatment, onBookingCompleted }: ChatWidgetProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -88,9 +134,8 @@ export default function ChatWidget({ onBookTreatment, onBookingCompleted }: Chat
     setIsTyping(true);
 
     try {
-      const response = await fetch('http://localhost:5000/api/chat', {
+      const response = await apiFetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sessionId,
           message: textToSend
@@ -141,7 +186,7 @@ export default function ChatWidget({ onBookTreatment, onBookingCompleted }: Chat
   const handleClearHistory = async () => {
     if (window.confirm('Are you sure you want to clear this conversation history?')) {
       try {
-        await fetch(`http://localhost:5000/api/chat/session/${sessionId}`, { method: 'DELETE' });
+        await apiFetch(`/api/chat/session/${sessionId}`, { method: 'DELETE' });
       } catch (e) {
         console.error(e);
       }
@@ -194,7 +239,7 @@ export default function ChatWidget({ onBookTreatment, onBookingCompleted }: Chat
         {messages.map(msg => (
           <div key={msg.id} className={`chat-message ${msg.sender}`} id={`chat-msg-${msg.id}`}>
             <div className="message-bubble">
-              {msg.text}
+              {renderMarkdown(msg.text)}
             </div>
             <span className="message-time">
               {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

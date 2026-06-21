@@ -7,7 +7,7 @@ import { ClinicConfig } from '../types/clinic.types';
 dotenv.config();
 
 export const PORT = process.env.PORT || 5000;
-export const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
+export const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
 export const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 
 const servicesJsonPath = path.resolve(__dirname, '../data/services.json');

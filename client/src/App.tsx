@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Sparkles, Calendar, Settings, Sun, Moon } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Sparkles, Calendar, Settings, Sun, Moon, X } from 'lucide-react';
 import ClinicDashboard from './components/ClinicDashboard';
 import ChatWidget from './components/ChatWidget';
 import AppointmentForm from './components/AppointmentForm';
@@ -18,10 +18,21 @@ export default function App() {
   const [selectedTreatment, setSelectedTreatment] = useState<Treatment | null>(null);
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
   const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
+  const [showEmergencyBanner, setShowEmergencyBanner] = useState(true);
+
+  // Restore saved theme on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('auracare-theme');
+    if (saved === 'light') {
+      setThemeMode('light');
+      document.body.classList.add('light-theme');
+    }
+  }, []);
 
   const toggleTheme = () => {
     const newTheme = themeMode === 'dark' ? 'light' : 'dark';
     setThemeMode(newTheme);
+    localStorage.setItem('auracare-theme', newTheme);
     const body = document.body;
     if (newTheme === 'light') {
       body.classList.add('light-theme');
@@ -51,6 +62,25 @@ export default function App() {
       {/* Background Ambient Orbs */}
       <div className="ambient-orb orb-emerald"></div>
       <div className="ambient-orb orb-indigo"></div>
+
+      {/* Emergency Contact Banner */}
+      {showEmergencyBanner && (
+        <div className="emergency-banner">
+          <span>
+            🚨 Dental/Medical Emergency? Call our 24/7 hotline:{' '}
+            <a href="tel:+15558722273" style={{ color: '#fff', fontWeight: 700, textDecoration: 'underline' }}>
+              +1 (555) 872-2273
+            </a>
+          </span>
+          <button
+            className="emergency-banner-close"
+            onClick={() => setShowEmergencyBanner(false)}
+            aria-label="Dismiss emergency banner"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
 
       {/* Header / Navbar */}
       <header className="glass-panel navbar" style={{ border: '1px solid rgba(255, 255, 255, 0.1)' }}>

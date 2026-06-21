@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, User, Phone, FileText, Clock, Sparkles, CheckCircle2 } from 'lucide-react';
+import { apiFetch } from '../config/api';
 
 interface Treatment {
   id: string;
@@ -35,7 +36,7 @@ export default function AppointmentForm({ isOpen, onClose, selectedTreatment, on
   useEffect(() => {
     async function loadTreatments() {
       try {
-        const res = await fetch('http://localhost:5000/api/services');
+        const res = await apiFetch('/api/services');
         if (res.ok) {
           const data = await res.json();
           setTreatments(data.treatments);
@@ -127,9 +128,8 @@ export default function AppointmentForm({ isOpen, onClose, selectedTreatment, on
 
     setIsSubmitting(true);
     try {
-      const response = await fetch('http://localhost:5000/api/appointments', {
+      const response = await apiFetch('/api/appointments', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
       });
 

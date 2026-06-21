@@ -123,4 +123,12 @@ describe('Clinic AI Assistant API Integration Tests', () => {
     const treatments = updatedServicesRes.body.treatments;
     expect(treatments.some((t: any) => t.id === 'hollywood-laser-glow')).toBe(true);
   });
+
+  test('GET /api/admin/stats - should return dashboard statistics', async () => {
+    const res = await request(app).get('/api/admin/stats');
+    expect(res.status).toBe(200);
+    expect(res.body.totalAppointments).toBeDefined();
+    expect(res.body.totalTreatments).toBeDefined();
+    expect(res.body.totalFaqs).toBeDefined();
+  });
 });
